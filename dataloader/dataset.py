@@ -12,6 +12,7 @@ import yaml
 
 class Dataset():
     def __init__(self, args):
+        self.dataset_name = 'InOutDoor'
         self._dataset = args.dataset_path
         self._image_set_path = args.image_set_path
         self._image_set = args.image_sets
@@ -19,7 +20,7 @@ class Dataset():
         self._annotation_path = args.annotations
         self.dataset_dicts = []
 
-    def load_annotations(self):
+    def load_annotations(self,set):
         with open(self._image_set_path + self._image_set + '.yml') as annon_file:
             for line in annon_file:
                 x = self.read_annon_file(self._annotation_path + line + '.yml')
@@ -45,8 +46,9 @@ class Dataset():
 
     def register_dataset(self):
         for d in ["train", "val"]:
-            DatasetCatalog.register("balloon_" + d, lambda d=d: get_balloon_dicts("balloon/" + d))
-            MetadataCatalog.get("balloon_" + d).set(thing_classes=["balloon"])
+            self._image_set = d
+            DatasetCatalog.register(self.dataset_name+"_" + d, lambda d=d: self.load_annotations(d))
+            MetadataCatalog.get(self.dataset_name+"_" + d).set(thing_classes=["Pedestrians"])
         balloon_metadata = MetadataCatalog.get("balloon_train")
 
     @staticmethod
