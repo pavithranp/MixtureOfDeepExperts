@@ -39,6 +39,7 @@ class Dataset():
                         "bbox": [bndbox['xmin'], bndbox['ymin'], bndbox['xmax'], bndbox['ymax']],
                         "bbox_mode": BoxMode.XYXY_ABS,
                         "objectness_logits": 0,
+                        "category_id": 0,
                     }
                     objs.append(obj)
                 record["annotations"] = objs

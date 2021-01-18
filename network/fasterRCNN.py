@@ -11,7 +11,7 @@ from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.modeling import build_model
 
 def load_saveFasterRCNN():
-    PATH = 'model/faster-RCNN.pth'
+    PATH = '../model/faster-RCNN.pth'
     cfg = get_cfg()
     # add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
     cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
