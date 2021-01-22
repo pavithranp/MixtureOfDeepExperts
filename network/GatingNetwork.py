@@ -32,94 +32,80 @@ aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], c
 # out =pred(im)
 # print(out)
 model = build_model(cfg)
-cfg1= cfg.clone()
 image = cv2.imread("../docs/input.jpg")
 height, width = image.shape[:2]
 image = aug.get_transform(image).apply_image(image)
 image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 inputs = [{"image": image, "height": height, "width": width}]
 model.eval()
+
 checkpointer = DetectionCheckpointer(model)
-checkpointer.load(cfg1.MODEL.WEIGHTS)
+checkpointer.load(cfg.MODEL.WEIGHTS)
 # with torch.no_grad():
 #     out = model(inputs)[0]
 # print(out)
+class FRCNN_ROIHeads(nn.Module):
+    def __init__(self,model,cfg):
+        super(FRCNN_ROIHeads, self).__init__()
+        checkpointer = DetectionCheckpointer(model)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
+        self.model = build_model(cfg)
+        model.eval()
+    def forward(self,inputs):
+        with torch.no_grad():
+            self.model.proposal_generator.training = False
+            images = self.model.preprocess_image(inputs)  # don't forget to preprocess
+            features = self.model.backbone(images.tensor)  # set of cnn features
+            proposals, _ = self.model.proposal_generator(images, features, None)  # RPN
 
-with torch.no_grad():
-    model.proposal_generator.training = False
-    images = model.preprocess_image(inputs)  # don't forget to preprocess
-    features = model.backbone(images.tensor)  # set of cnn features
-    proposals, _ = model.proposal_generator(images, features, None)  # RPN
+            features_ = [features[f] for f in self.model.roi_heads.in_features]
+            box_features = self.model.roi_heads.pooler(features_, [x.proposal_boxes for x in proposals])
+            box_features = self.model.roi_heads.res5(box_features)  # features of all 1k candidates
+            # predictions = model.roi_heads.box_predictor(box_features)
+            x = box_features.mean(dim=[2, 3])  # features
+            scores = self.model.roi_heads.box_predictor.cls_score(x)
+            proposal_deltas = self.model.roi_heads.box_predictor.bbox_pred(x)
+        return box_features,scores, proposal_deltas, proposals, features
 
-    features_ = [features[f] for f in model.roi_heads.in_features]
-    box_features = model.roi_heads.pooler(features_, [x.proposal_boxes for x in proposals])
-    box_features = model.roi_heads.res5(box_features)  # features of all 1k candidates
-    # predictions = model.roi_heads.box_predictor(box_features)
-    x = box_features.mean(dim=[2, 3])  # features
-    scores = model.roi_heads.box_predictor.cls_score(x)
-    proposal_deltas = model.roi_heads.box_predictor.bbox_pred(x)
-    predictions = scores, proposal_deltas
-    pred_instances, _ = model.roi_heads.box_predictor.inference(predictions, proposals)
-    results = model.roi_heads.forward_with_given_boxes(features, pred_instances)
-
-    # output boxes, masks, scores, etc
-    pred_instances = model._postprocess(pred_instances, inputs, images.image_sizes)  # scale box to orig size
-    # features of the proposed boxes
-    # feats = box_features[pred_inds]
-    # model.eval()
-    print(pred_instances)
-# out = model(input)
-
-# print(out)
-class MyModelA(nn.Module):
-    def __init__(self):
-        super(MyModelA, self).__init__()
-        self.fc1 = nn.Linear(20, 10)
-        self.fc2 = nn.Linear(10, 2)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.fc2(x)
-        return x
+class FRCNN_OutputLayer(nn.Module):
+    def __init__(self,model,cfg):
+        super(FRCNN_OutputLayer, self).__init__()
+        self.model = build_model(cfg)
+        self.model.eval()
+    def forward(self,scores, proposal_deltas, proposals, features,images):
+        with torch.no_grad():
+            predictions = scores, proposal_deltas
+            pred_instances, _ = self.model.roi_heads.box_predictor.inference(predictions, proposals)
+            pred_instances = self.model.roi_heads.forward_with_given_boxes(features, pred_instances)
+        return self.model._postprocess(pred_instances, inputs, images.image_sizes)
 
 
-class MyModelB(nn.Module):
-    def __init__(self):
-        super(MyModelB, self).__init__()
-        self.fc1 = nn.Linear(10, 2)
 
-    def forward(self, x):
-        x = self.fc1(x)
-        return x
-
-
-class MyEnsemble(nn.Module):
-    def __init__(self, modelA, modelB,model):
-        super(MyEnsemble, self).__init__()
-        self.modelA = modelA
-        self.modelB = modelB
-        self.faster_rcnn = model
+class GatingNetwork(nn.Module):
+    def __init__(self, modelA, modelB):
+        super(GatingNetwork, self).__init__()
+        num_class = 2
+        num_experts = 2
+        self.RGBDetector = FRCNN_ROIHeads(modelA)
+        self.DepthDetector = FRCNN_ROIHeads(modelB)
+        self.gatingLayer1 = nn.Linear(2048,500)
+        self.RGBGating = nn.Linear(500,num_class)
+        self.DepthGating = nn.Linear(500,num_class)
+        self.output = FRCNN_OutputLayer(modelA)
 
 
     def forward(self, x1, x2):
-        head1 = self.modelA(x1)
-        head2 = self.modelB(self.modelA.fc1(x1))
-        features = model.backbone(x2)
-        proposals = model.proposal_generator(x2,features,None)
-        proposal_boxes = [x.proposal_boxes for x in proposals]
-        box_features = model.roi_heads._shared_roi_transform(
-            [features[f] for f in self.in_features], proposal_boxes
-        )
-        x =  box_features.mean(dim=[2, 3]) #features
-        scores = model.roi_heads.box_predictor.cls_score(x)
-        proposal_deltas = model.roi_heads.box_predictor.bbox_pred(x)
-        predictions = scores,proposal_deltas
-        pred_instances, _ = model.roi_heads.box_predictor.inference(predictions, proposals)
-        results = model.roi_heads.forward_with_given_boxes(features, pred_instances)
-        x = torch.cat((head1, head2,results), dim=1)
-        return x
+        RGB_box_features, RGB_scores, RGB_proposal_deltas, RGB_proposals, RGBfeatures = self.RGBDetector(x1)
+        Depth_box_features, Depth_scores, _, _, _ = self.DepthDetector(x2)
+        inputs = torch.cat([RGB_box_features,Depth_box_features ], dim=1)
+        # Depth_box_features, Depth_scores, Depth_proposal_deltas, Depth_proposals, Depthfeatures = self.DepthDetector(x2)
+        x = self.gatingLayer1(inputs)
+        RGB = self.RGBGating(x)
+        Depth = self.DepthGating(x)
+        self.weighted_scores = nn.Softmax(RGB*RGB_scores + Depth*Depth_scores)
+        return self.output(self.weighted_scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures)
 
-a = MyModelA()
-b = MyModelB()
-combined = MyEnsemble(a,b,model)
+a = build_model(cfg)
+b = build_model(cfg)
+combined = GatingNetwork(a,b,model)
 # print(combined)
