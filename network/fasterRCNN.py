@@ -9,7 +9,7 @@ from detectron2.config import get_cfg
 from detectron2.utils.visualizer import Visualizer
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.modeling import build_model
-
+import cv2
 def load_saveFasterRCNN():
     PATH = '../model/faster-RCNN.pth'
     cfg = get_cfg()
@@ -21,7 +21,17 @@ def load_saveFasterRCNN():
     model = build_model(cfg)
     torch.save(model, PATH)
 
+def forDebug_FasterRCNN():
+    im = cv2.imread("../docs/input.jpg")
+    cfg = get_cfg()
+    # add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml"))
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
+    # Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    predictor = DefaultPredictor(cfg)
+    predictor(im)
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    load_saveFasterRCNN()
+    forDebug_FasterRCNN()
 

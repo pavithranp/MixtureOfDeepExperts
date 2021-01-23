@@ -13,44 +13,15 @@ import torch ,cv2
 from torch import nn
 import numpy as np
 # PATH = '../model/faster-RCNN_FPN.pth'
-height, width = 480,640
-im = cv2.imread("../docs/input.jpg")
-# x = torch.tensor(np.reshape(im,(1,3,im.shape[0],im.shape[1]))).cuda()
-x = torch.randn(1,3,height,width).cuda()
-input = [{'image':x}]
-model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
-# model = torch.load(PATH)
-cfg = get_cfg()
-from detectron2.structures import ImageList
-# add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
-cfg.merge_from_file(model_zoo.get_config_file(model))
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
-# Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
-cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(model)
-aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST )
-# pred = DefaultPredictor(cfg)
-# out =pred(im)
-# print(out)
-model = build_model(cfg)
-image = cv2.imread("../docs/input.jpg")
-height, width = image.shape[:2]
-image = aug.get_transform(image).apply_image(image)
-image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-inputs = [{"image": image, "height": height, "width": width}]
-model.eval()
 
-checkpointer = DetectionCheckpointer(model)
-checkpointer.load(cfg.MODEL.WEIGHTS)
 # with torch.no_grad():
 #     out = model(inputs)[0]
 # print(out)
 class FRCNN_ROIHeads(nn.Module):
-    def __init__(self,model,cfg):
+    def __init__(self,cfg):
         super(FRCNN_ROIHeads, self).__init__()
-        checkpointer = DetectionCheckpointer(model)
-        checkpointer.load(cfg.MODEL.WEIGHTS)
         self.model = build_model(cfg)
-        model.eval()
+        self.model.eval()
     def forward(self,inputs):
         with torch.no_grad():
             self.model.proposal_generator.training = False
@@ -59,16 +30,21 @@ class FRCNN_ROIHeads(nn.Module):
             proposals, _ = self.model.proposal_generator(images, features, None)  # RPN
 
             features_ = [features[f] for f in self.model.roi_heads.in_features]
+            # box_features = self.model.roi_heads.box_pooler(features_, [x.proposal_boxes for x in proposals])
+            # x = self.model.roi_heads.box_head(box_features)  # features of all 1k candidates
             box_features = self.model.roi_heads.pooler(features_, [x.proposal_boxes for x in proposals])
             box_features = self.model.roi_heads.res5(box_features)  # features of all 1k candidates
+
             # predictions = model.roi_heads.box_predictor(box_features)
             x = box_features.mean(dim=[2, 3])  # features
+            if x.dim() > 2:
+                x = torch.flatten(x, start_dim=1)
             scores = self.model.roi_heads.box_predictor.cls_score(x)
             proposal_deltas = self.model.roi_heads.box_predictor.bbox_pred(x)
         return box_features,scores, proposal_deltas, proposals, features
 
 class FRCNN_OutputLayer(nn.Module):
-    def __init__(self,model,cfg):
+    def __init__(self,cfg):
         super(FRCNN_OutputLayer, self).__init__()
         self.model = build_model(cfg)
         self.model.eval()
@@ -105,7 +81,37 @@ class GatingNetwork(nn.Module):
         self.weighted_scores = nn.Softmax(RGB*RGB_scores + Depth*Depth_scores)
         return self.output(self.weighted_scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures)
 
-a = build_model(cfg)
-b = build_model(cfg)
-combined = GatingNetwork(a,b,model)
+if __name__ == '__main':
+    height, width = 480, 640
+    im = cv2.imread("../docs/input.jpg")
+    # x = torch.tensor(np.reshape(im,(1,3,im.shape[0],im.shape[1]))).cuda()
+    x = torch.randn(1, 3, height, width).cuda()
+    input = [{'image': x}]
+    model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
+    # model = torch.load(PATH)
+    cfg = get_cfg()
+    from detectron2.structures import ImageList
+
+    # add project-specific config (e.g., TensorMask) here if you're not running a model in detectron2's core library
+    cfg.merge_from_file(model_zoo.get_config_file(model))
+    cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5  # set threshold for this model
+    # Find a model from detectron2's model zoo. You can use the https://dl.fbaipublicfiles... url as well
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(model)
+    aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
+    # pred = DefaultPredictor(cfg)
+    # out =pred(im)
+    # print(out)
+    model = build_model(cfg)
+    image = cv2.imread("../docs/image.jpg")
+    height, width = image.shape[:2]
+    image = aug.get_transform(image).apply_image(image)
+    image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+    inputs = [{"image": image, "height": height, "width": width}]
+    model.eval()
+
+    checkpointer = DetectionCheckpointer(model)
+    checkpointer.load(cfg.MODEL.WEIGHTS)
+    a = build_model(cfg)
+    b = build_model(cfg)
+    combined = GatingNetwork(a,b,model)
 # print(combined)
