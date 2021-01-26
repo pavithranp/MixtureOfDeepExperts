@@ -7,6 +7,8 @@ from detectron2.modeling import build_model
 import detectron2.data.transforms as T
 from detectron2.checkpoint import DetectionCheckpointer
 # import random
+from torch.nn import functional as F
+from torch.nn.parameter import Parameter
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 import torch ,cv2
@@ -48,9 +50,9 @@ class Gating_ROIHeads(nn.Module):
 
         self.model1.eval()
         self.model2.eval()
-        self.model3.eval()
+        # self.model3.eval()
         with torch.no_grad():
-            out = self.model3(x1)[0]
+            # out = self.model3(x1)[0]
             # return self.model(inputs)[0]
             self.model1.proposal_generator.training = False
 
@@ -74,22 +76,27 @@ class Gating_ROIHeads(nn.Module):
                                             topk_proposals=topkboxes,topk_scores=topklogits,level_ids=levels)
 
             features_ = [features[f] for f in self.model1.roi_heads.in_features]
-            # box_features = self.model.roi_heads.box_pooler(features_, [x.proposal_boxes for x in proposals])
-            # x = self.model.roi_heads.box_head(box_features)  # features of all 1k candidates
-            box_features = self.model1.roi_heads._shared_roi_transform(features_, [x.proposal_boxes for x in proposals])
-            # box_features1 = self.model1.roi_heads.res5(box_features)  # features of all 1k candidates
 
-            # predictions = model.roi_heads.box_predictor(box_features)
-            x = box_features.mean(dim=[2, 3])  # features
+            box_features1 = self.model1.roi_heads._shared_roi_transform(features_, [x.proposal_boxes for x in proposals])
+
+            x = box_features1.mean(dim=[2, 3])  # features
             if x.dim() > 2:
                 x = torch.flatten(x, start_dim=1)
-            scores = self.model1.roi_heads.box_predictor.cls_score(x)
-            proposal_deltas = self.model1.roi_heads.box_predictor.bbox_pred(x)
-            return box_features,scores, proposal_deltas, proposals, features
+            scores1 = self.model1.roi_heads.box_predictor.cls_score(x)
+            proposal_deltas1 = self.model1.roi_heads.box_predictor.bbox_pred(x)
 
-class FRCNN_OutputLayer(nn.Module):
+            box_features2 = self.model2.roi_heads._shared_roi_transform(features_, [x.proposal_boxes for x in proposals])
+
+            x = box_features2.mean(dim=[2, 3])  # features
+            if x.dim() > 2:
+                x = torch.flatten(x, start_dim=1)
+            scores2 = self.model2.roi_heads.box_predictor.cls_score(x)
+            proposal_deltas2 = self.model2.roi_heads.box_predictor.bbox_pred(x)
+            return box_features1,box_features2,scores1,scores2, proposal_deltas1, proposals ,features_
+
+class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
-        super(FRCNN_OutputLayer, self).__init__()
+        super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
         self.model.eval()
     def forward(self,scores, proposal_deltas, proposals, features,images):
@@ -97,7 +104,7 @@ class FRCNN_OutputLayer(nn.Module):
             predictions = scores, proposal_deltas
             pred_instances, _ = self.model.roi_heads.box_predictor.inference(predictions, proposals)
             pred_instances = self.model.roi_heads.forward_with_given_boxes(features, pred_instances)
-            return self.model._postprocess(pred_instances, inputs, images.image_sizes)
+            return self.model._postprocess(pred_instances, images, images.image_sizes)
 
 
 
@@ -107,19 +114,23 @@ class GatingNetwork(nn.Module):
         num_class = 2
         num_experts = 2
         self.Detector = Gating_ROIHeads(cfg_modelA,cfg_modelB)
-        self.gatingLayer1 = nn.Linear(2048,500)
+        self.weight = Parameter(torch.Tensor(2, 4096).cuda())
+        self.bias = Parameter(torch.Tensor(2).cuda())
+        self.gatingLayer1 = nn.Linear(4096,500)
         self.RGBGating = nn.Linear(500,num_class)
         self.DepthGating = nn.Linear(500,num_class)
-        self.output = FRCNN_OutputLayer(cfg_modelA)
+        self.output = Gating_OutputLayer(cfg_modelA)
 
 
     def forward(self, x1, x2):
-            RGB_box_features, RGB_scores, RGB_proposal_deltas, RGB_proposals, RGBfeatures = self.Detector(x1,x2)
-            Depth_box_features, Depth_scores, _, _, Depthfeatures = self.DepthDetector(x2)
-            inputs = torch.cat([RGBfeatures,Depthfeatures ], dim=1)
+            RGB_box_features, Depth_box_features, RGBscores, DepthScores, RGB_proposal_deltas, RGB_proposals ,RGBfeatures = self.Detector(x1,x2)
+
+            inputs = torch.cat([RGB_box_features,Depth_box_features ], dim=1)
             # Depth_box_features, Depth_scores, Depth_proposal_deltas, Depth_proposals, Depthfeatures = self.DepthDetector(x2)
-            x = self.gatingLayer1(inputs)
-            RGB = self.RGBGating(x)
-            Depth = self.DepthGating(x)
-            self.weighted_scores = nn.Softmax(RGB*RGB_scores + Depth*Depth_scores)
-            return self.output(self.weighted_scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures)
+            input = inputs.mean(dim=[2, 3])
+            x = F.linear(input,self.weight,self.bias)
+            scores = x*RGBscores + (1-x)*DepthScores
+            # RGB = self.RGBGating(x)
+            # Depth = self.DepthGating(x)
+            # self.weighted_scores = nn.Softmax(RGB*RGBscores + Depth*DepthScores)
+            return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,x1)

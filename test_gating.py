@@ -1,5 +1,5 @@
 from network.GatingNetwork import  GatingNetwork
-from network.GatingNetwork import FRCNN_OutputLayer,Gating_ROIHeads
+from network.GatingNetwork import Gating_OutputLayer,Gating_ROIHeads
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 import torch,cv2
@@ -27,7 +27,7 @@ cfg.SOLVER.IMS_PER_BATCH = 2
 cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
 cfg.SOLVER.MAX_ITER = 5000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
 cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128   # faster, and good enough for this toy dataset (default: 512)
-cfg.MODEL.ROI_HEADS.NUM_CLASSES = 80
+cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 
 # cfg.MODEL.WEIGHTS = "output_RGB/model_final.pth"
 
@@ -44,10 +44,10 @@ with torch.no_grad():
     RGBD_network = Gating_ROIHeads(cfg,cfg2)
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
-    x = RGBD_network(rgb,depth)
-    # gn = GatingNetwork(cfg,cfg)
+    # x = RGBD_network(rgb,depth)
+    gn = GatingNetwork(cfg,cfg)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
-    # gn(depth,rgb)
+    gn(rgb,depth)
 
 
