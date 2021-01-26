@@ -78,8 +78,8 @@ class GatingNetwork(nn.Module):
 
     def forward(self, x1, x2):
             RGB_box_features, RGB_scores, RGB_proposal_deltas, RGB_proposals, RGBfeatures = self.RGBDetector(x1)
-            Depth_box_features, Depth_scores, _, _, _ = self.DepthDetector(x2)
-            inputs = torch.cat([RGB_box_features,Depth_box_features ], dim=1)
+            Depth_box_features, Depth_scores, _, _, Depthfeatures = self.DepthDetector(x2)
+            inputs = torch.cat([RGBfeatures,Depthfeatures ], dim=1)
             # Depth_box_features, Depth_scores, Depth_proposal_deltas, Depth_proposals, Depthfeatures = self.DepthDetector(x2)
             x = self.gatingLayer1(inputs)
             RGB = self.RGBGating(x)
