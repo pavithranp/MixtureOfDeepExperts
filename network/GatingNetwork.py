@@ -12,6 +12,7 @@ from detectron2.config import get_cfg
 import torch ,cv2
 from torch import nn
 import numpy as np
+from network import custom_proposal_generator
 # PATH = '../model/faster-RCNN_FPN.pth'
 
 # with torch.no_grad():
@@ -20,6 +21,7 @@ import numpy as np
 class FRCNN_ROIHeads(nn.Module):
     def __init__(self,cfg):
         super(FRCNN_ROIHeads, self).__init__()
+        cfg.MODEL.PROPOSAL_GENERATOR.NAME = 'CustomRPN'
         self.cfg = cfg
         self.model = build_model(cfg)
 
