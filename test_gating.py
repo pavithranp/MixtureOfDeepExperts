@@ -1,5 +1,5 @@
 from network.GatingNetwork import  GatingNetwork
-from network.GatingNetwork import FRCNN_OutputLayer,FRCNN_ROIHeads
+from network.GatingNetwork import FRCNN_OutputLayer,Gating_ROIHeads
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 import torch,cv2
@@ -32,17 +32,19 @@ cfg.MODEL.ROI_HEADS.NUM_CLASSES = 80
 # cfg.MODEL.WEIGHTS = "output_RGB/model_final.pth"
 
 model = build_model(cfg)
-checkpointer = DetectionCheckpointer(model)
-checkpointer.load(cfg.MODEL.WEIGHTS)
-input = image_process('docs/depthJet.png',cfg)
+cfg2 = cfg.clone()
+cfg.MODEL.WEIGHTS = "output/rgb.pth"
+cfg2.MODEL.WEIGHTS = "output/model_final.pth"
+rgb = image_process('docs/depthJet.png',cfg)
+depth = image_process('docs/image.png',cfg2)
 model.eval()
 with torch.no_grad():
 #     pred = model(input)[0]
 
-    RGB_network = FRCNN_ROIHeads(cfg)
+    RGBD_network = Gating_ROIHeads(cfg,cfg2)
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
-    x = RGB_network(input)
+    x = RGBD_network(rgb,depth)
     # gn = GatingNetwork(cfg,cfg)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
