@@ -92,19 +92,19 @@ class Gating_ROIHeads(nn.Module):
                 x = torch.flatten(x, start_dim=1)
             scores2 = self.model2.roi_heads.box_predictor.cls_score(x)
             proposal_deltas2 = self.model2.roi_heads.box_predictor.bbox_pred(x)
-            return box_features1,box_features2,scores1,scores2, proposal_deltas1, proposals ,features_
+            return box_features1,box_features2,scores1,scores2, proposal_deltas1, proposals ,features_,x1,images
 
 class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
         super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
         self.model.eval()
-    def forward(self,scores, proposal_deltas, proposals, features,images):
+    def forward(self,scores, proposal_deltas, proposals, features,images,batch_inputs):
         with torch.no_grad():
             predictions = scores, proposal_deltas
             pred_instances, _ = self.model.roi_heads.box_predictor.inference(predictions, proposals)
             pred_instances = self.model.roi_heads.forward_with_given_boxes(features, pred_instances)
-            return self.model._postprocess(pred_instances, images, images.image_sizes)
+            return self.model._postprocess(pred_instances, batch_inputs, images.image_sizes)
 
 
 
@@ -116,21 +116,17 @@ class GatingNetwork(nn.Module):
         self.Detector = Gating_ROIHeads(cfg_modelA,cfg_modelB)
         self.weight = Parameter(torch.Tensor(2, 4096).cuda())
         self.bias = Parameter(torch.Tensor(2).cuda())
-        self.gatingLayer1 = nn.Linear(4096,500)
-        self.RGBGating = nn.Linear(500,num_class)
-        self.DepthGating = nn.Linear(500,num_class)
+
         self.output = Gating_OutputLayer(cfg_modelA)
 
 
     def forward(self, x1, x2):
-            RGB_box_features, Depth_box_features, RGBscores, DepthScores, RGB_proposal_deltas, RGB_proposals ,RGBfeatures = self.Detector(x1,x2)
+            RGB_box_features, Depth_box_features, RGBscores, DepthScores, RGB_proposal_deltas, RGB_proposals ,RGBfeatures,x1,image = self.Detector(x1,x2)
 
             inputs = torch.cat([RGB_box_features,Depth_box_features ], dim=1)
             # Depth_box_features, Depth_scores, Depth_proposal_deltas, Depth_proposals, Depthfeatures = self.DepthDetector(x2)
             input = inputs.mean(dim=[2, 3])
             x = F.linear(input,self.weight,self.bias)
             scores = x*RGBscores + (1-x)*DepthScores
-            # RGB = self.RGBGating(x)
-            # Depth = self.DepthGating(x)
-            # self.weighted_scores = nn.Softmax(RGB*RGBscores + Depth*DepthScores)
-            return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,x1)
+
+            return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,image,x1)
