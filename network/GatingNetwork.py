@@ -14,7 +14,7 @@ from detectron2.config import get_cfg
 import torch ,cv2
 from torch import nn
 import numpy as np
-from network import custom_proposal_generator
+from network import GatingRPN
 # PATH = '../model/faster-RCNN_FPN.pth'
 
 # with torch.no_grad():
@@ -56,19 +56,19 @@ class Gating_ROIHeads(nn.Module):
             # return self.model(inputs)[0]
             self.model1.proposal_generator.training = False
 
-            images = self.model1.preprocess_image(x1)  # don't forget to preprocess
-            features = self.model1.backbone(images.tensor)  # set of cnn features
-            proposals1, _ = self.model1.proposal_generator(images, features, None)  # RPN
+            images1 = self.model1.preprocess_image(x1)  # don't forget to preprocess
+            features = self.model1.backbone(images1.tensor)  # set of cnn features
+            proposals1, _ = self.model1.proposal_generator(images1, features, None)  # RPN
 
 
             self.model2.proposal_generator.training = False
-            images = self.model2.preprocess_image(x1)  # don't forget to preprocess
-            features = self.model2.backbone(images.tensor)  # set of cnn features
-            proposals2, _ = self.model2.proposal_generator(images, features, None)  # RPN
+            images2 = self.model2.preprocess_image(x2)  # don't forget to preprocess
+            features = self.model2.backbone(images2.tensor)  # set of cnn features
+            proposals2, _ = self.model2.proposal_generator(images2, features, None)  # RPN
             topklogits = torch.cat((proposals1[0],proposals2[0]),dim=1)
             topkboxes = torch.cat((proposals1[1],proposals2[1]),dim=1)
             levels = torch.cat((proposals1[2],proposals2[2]),dim=0)
-            proposals = self.model1.proposal_generator.merge_proposals(image_sizes= images.image_sizes,
+            proposals = self.model1.proposal_generator.merge_proposals(image_sizes= images1.image_sizes,
                                             nms_thresh= self.model1.proposal_generator.nms_thresh,
                                             post_nms_topk= self.model1.proposal_generator.pre_nms_topk[self.training],
                                             min_box_size= self.model1.proposal_generator.min_box_size,
@@ -91,15 +91,15 @@ class Gating_ROIHeads(nn.Module):
             if x.dim() > 2:
                 x = torch.flatten(x, start_dim=1)
             scores2 = self.model2.roi_heads.box_predictor.cls_score(x)
-            proposal_deltas2 = self.model2.roi_heads.box_predictor.bbox_pred(x)
-            return box_features1,box_features2,scores1,scores2, proposal_deltas1, proposals ,features_,x1,images
+            # proposal_deltas2 = self.model2.roi_heads.box_predictor.bbox_pred(x)
+            return box_features1,box_features2,scores1,scores2, proposal_deltas1, proposals ,features_,x1,images1
 
 class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
         super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
         self.model.eval()
-    def forward(self,scores, proposal_deltas, proposals, features,images,batch_inputs):
+    def forward(self,scores, proposal_deltas, proposals, features,batch_inputs,images):
         with torch.no_grad():
             predictions = scores, proposal_deltas
             pred_instances, _ = self.model.roi_heads.box_predictor.inference(predictions, proposals)
@@ -112,10 +112,9 @@ class GatingNetwork(nn.Module):
     def __init__(self, cfg_modelA, cfg_modelB):
         super(GatingNetwork, self).__init__()
         num_class = 2
-        num_experts = 2
         self.Detector = Gating_ROIHeads(cfg_modelA,cfg_modelB)
-        self.weight = Parameter(torch.Tensor(2, 4096).cuda())
-        self.bias = Parameter(torch.Tensor(2).cuda())
+        self.weight = Parameter(torch.Tensor(num_class, 4096).cuda())
+        self.bias = Parameter(torch.Tensor(num_class).cuda())
 
         self.output = Gating_OutputLayer(cfg_modelA)
 
@@ -129,4 +128,4 @@ class GatingNetwork(nn.Module):
             x = F.linear(input,self.weight,self.bias)
             scores = x*RGBscores + (1-x)*DepthScores
 
-            return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,image,x1)
+            return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,x1,image)

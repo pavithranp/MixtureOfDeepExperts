@@ -3,10 +3,8 @@ from network.GatingNetwork import Gating_OutputLayer,Gating_ROIHeads
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 import torch,cv2
-import detectron2.data.transforms as T
 from detectron2.modeling import build_model
 import detectron2.data.transforms as T
-from detectron2.checkpoint import DetectionCheckpointer
 
 def image_process(path,cfg):
     aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
@@ -41,13 +39,14 @@ model.eval()
 with torch.no_grad():
 #     pred = model(input)[0]
 
-    RGBD_network = Gating_ROIHeads(cfg,cfg2)
+    # RGBD_network = Gating_ROIHeads(cfg,cfg2)
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
     # x = RGBD_network(rgb,depth)
-    gn = GatingNetwork(cfg,cfg)
+    gn = GatingNetwork(cfg,cfg2)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
-    gn(rgb,depth)
+    out = gn(rgb,depth)
+    print(gn.parameters())
 
 
