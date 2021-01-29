@@ -3,16 +3,24 @@ from network.GatingNetwork import Gating_OutputLayer,Gating_ROIHeads
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 import torch,cv2
+import detectron2.data.transforms as T
 from detectron2.modeling import build_model
 import detectron2.data.transforms as T
+from detectron2.checkpoint import DetectionCheckpointer
 
-def image_process(path,cfg):
+def image_process(path1,path2,cfg):
     aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
-    image = cv2.imread(path)
-    height, width = image.shape[:2]
-    image = aug.get_transform(image).apply_image(image)
-    image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-    return [{"image": image, "height": height, "width": width}]
+    image1 = cv2.imread(path1)
+    height, width = image1.shape[:2]
+    image1 = aug.get_transform(image1).apply_image(image1)
+    image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
+
+    image2 = cv2.imread(path1)
+    height, width = image2.shape[:2]
+    image2 = aug.get_transform(image2).apply_image(image2)
+    image2 = torch.as_tensor(image2.astype("float32").transpose(2, 0, 1))
+
+    return [{"rgb_image": image1,"depth_image": image2, "height": height, "width": width}]
 
 cfg = get_cfg()
 cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"))
@@ -31,22 +39,21 @@ cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 
 model = build_model(cfg)
 cfg2 = cfg.clone()
-cfg.MODEL.WEIGHTS = "output/rgb.pth"
-cfg2.MODEL.WEIGHTS = "output/model_final.pth"
-rgb = image_process('docs/depthJet.png',cfg)
-depth = image_process('docs/image.png',cfg2)
+cfg.MODEL.WEIGHTS = "output/model_final.pth"
+cfg2.MODEL.WEIGHTS = "DepthJetQhd/model_final.pth"
+rgb = image_process('docs/image.png','docs/depthJet.png',cfg)
+# depth = image_process(,cfg2)
 model.eval()
 with torch.no_grad():
 #     pred = model(input)[0]
 
-    # RGBD_network = Gating_ROIHeads(cfg,cfg2)
+    RGBD_network = Gating_ROIHeads(cfg,cfg2)
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
     # x = RGBD_network(rgb,depth)
-    gn = GatingNetwork(cfg,cfg2)
+    gn = GatingNetwork(cfg,cfg)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
-    out = gn(rgb,depth)
-    print(gn.parameters())
+    gn(rgb)
 
 
