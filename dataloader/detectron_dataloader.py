@@ -5,47 +5,36 @@
 from detectron2.structures import BoxMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.utils.visualizer import Visualizer
-import cv2
-import os
-import numpy as np
 import yaml
-import numpy as np
 import os, json, cv2, random
 
-# import some common detectron2 utilities
-from detectron2.engine import DefaultTrainer
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
+class RGBDDataset():
+    def __init__(self,root,dataset_name):
+        self.dataset_name = dataset_name
+        self._RGBDataset = os.path.join(root,"ImagesQhd")
+        self._DepthDataset = os.path.join(root,"DepthJetQhd")
+        self._image_set_path = os.path.join(root,"ImageSets")
 
-
-class Dataset():
-    def __init__(self, args):
-        self.dataset_name = 'InOutDoorDepth'
-        self._dataset = "/no_backups/d1386/InOutDoorPeopleRGBD/"+args
-        self._image_set_path = "/no_backups/d1386/InOutDoorPeopleRGBD/ImageSets/"
         self._image_set = 'train'
-        self._annotation_path = "/no_backups/d1386/InOutDoorPeopleRGBD/Annotations/"
+        self._annotation_path = os.path.join(root,"Annotations")
 
-        #        self._dataset = args.dataset_path
-        #        self._image_set_path = args.image_set_path
-        #        self._image_set = args.image_sets
-        #        self._dataset = args.dataset_path
-        #        self._annotation_path = args.annotations
         self.dataset_dicts = []
         self.register_dataset()
 
     def load_annotations(self):
         # self._image_set = set
-        with open(self._image_set_path + self._image_set + '.txt') as annon_file:
+        with open(os.path.join(self._image_set_path , self._image_set + '.txt')) as annon_file:
             size =0
             for line in annon_file:
-                x = self.read_annon_file(self._annotation_path + line[:-1] + '.yml')
+                x = self.read_annon_file(os.path.join(self._annotation_path , line[:-1] + '.yml'))
                 record = {"image_id": x['filename'][:-4]}
-                record["file_name"] = self._dataset + record['image_id']+'.png'
-                image = cv2.imread(record["file_name"])
-                record["height"],record["width"],_ = image.shape
+                record["rgb_file_name"] = os.path.join(self._RGBDataset , record['image_id']+'.png')
+                record["depth_file_name"] = os.path.join(self._DepthDataset , record['image_id']+'.png')
+                # image = cv2.imread(record["rgb_file_name"])
+                record["height"],record["width"] = 540,960
                 # record["width"] = 960
+                ratiox = 960/1920
+                ratioy = 540 / 1080
                 if not 'object' in x:
                     continue
                 size +=1
@@ -54,7 +43,8 @@ class Dataset():
                 for anno in objects:
                     bndbox = anno["bndbox"]
                     obj = {
-                        "bbox": [float(bndbox['xmin']), float(bndbox['ymin']), float(bndbox['xmax']), float(bndbox['ymax'])],
+                        "bbox": [float(bndbox['xmin'])*ratiox, float(bndbox['ymin'])*ratioy,
+                                 float(bndbox['xmax'])*ratiox, float(bndbox['ymax'])*ratioy],
                         "bbox_mode": BoxMode.XYXY_ABS,
                         # "objectness_logits": 1.0,
                         "category_id": 0,
