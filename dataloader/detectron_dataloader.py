@@ -5,19 +5,8 @@
 from detectron2.structures import BoxMode
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.utils.visualizer import Visualizer
-import cv2
-import os
-import numpy as np
 import yaml
-import numpy as np
 import os, json, cv2, random
-
-# import some common detectron2 utilities
-from detectron2.engine import DefaultTrainer
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-
 
 class RGBDDataset():
     def __init__(self,root,dataset_name):

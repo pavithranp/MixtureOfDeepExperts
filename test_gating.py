@@ -47,7 +47,7 @@ model.eval()
 with torch.no_grad():
 #     pred = model(input)[0]
 
-    RGBD_network = Gating_ROIHeads(cfg,cfg2)
+    # RGBD_network = Gating_ROIHeads(cfg,cfg2)
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
     # x = RGBD_network(rgb,depth)

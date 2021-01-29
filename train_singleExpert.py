@@ -7,7 +7,7 @@ from detectron2.config import get_cfg
 from dataloader.dataset import Dataset
 
 if __name__=="__main__":
-    args="DepthJetQhd/"
+    args="DepthJetQhd/" # change to ImagesQhd/
     x = Dataset(args)
     cfg = get_cfg()
     model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"

@@ -1,25 +1,12 @@
 from network.GatingNetwork import  GatingNetwork
-from network.GatingNetwork import Gating_OutputLayer,Gating_ROIHeads
 from detectron2.config import get_cfg
 from detectron2 import model_zoo
 import os, torch,cv2, copy
 import detectron2.data.transforms as T
-from detectron2.modeling import build_model
-import detectron2.data.transforms as T
-from dataloader.rgbdataloader import RGBD
+from dataloader.torch_dataloader import RGBD
 from detectron2.structures import BoxMode
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.data import build_detection_train_loader
 from detectron2.data import detection_utils as utils
 from detectron2.utils.events import EventStorage
-
-def image_process(path,cfg):
-    aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
-    image = cv2.imread(path)
-    height, width = image.shape[:2]
-    image = aug.get_transform(image).apply_image(image)
-    image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-    return [{"image": image, "height": height, "width": width}]
 
 def collate_fn(batch):
     for x in batch:
@@ -37,14 +24,8 @@ def mapper(dataset_dict):
     dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
     # can use other ways to read image
     rgb_image = utils.read_image(dataset_dict["rgb_file_name"], format="BGR")
-    # See "Data Augmentation" tutorial for details usage
-    # auginput = T.AugInput(rgb_image)
-    # transform = T.Resize((800, 1333))(auginput)
     rgb_image = torch.tensor(rgb_image.transpose(2, 0, 1), requires_grad=True)
     depth_image = utils.read_image(dataset_dict["depth_file_name"], format="BGR")
-    # See "Data Augmentation" tutorial for details usage
-    # auginput = T.AugInput(depth_image)
-    # transform = T.Resize((800, 1333))(auginput)
     depth_image = torch.from_numpy(depth_image.transpose(2, 0, 1).copy(), requires_grad=True).cuda()
     annos = [
         utils.transform_instance_annotations(annotation, [], rgb_image.shape[1:])
@@ -59,11 +40,8 @@ def mapper(dataset_dict):
         "height" :540,
        "instances": utils.annotations_to_instances(annos, rgb_image.shape[1:])
     }
-# dataloader = build_detection_train_loader(cfg, mapper=mapper)
 if __name__=="__main__":
     dataset_name ="RGBD"
-    # x = RGBDDataset('/no_backups/d1386/InOutDoorPeopleRGBD',dataset_name)
-
     cfg = get_cfg()
     model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
     cfg.merge_from_file(model_zoo.get_config_file(model))
@@ -81,7 +59,6 @@ if __name__=="__main__":
     cfg_depth = cfg.clone()
     cfg.MODEL.WEIGHTS = "output/model_final.pth"
     cfg_depth.MODEL.WEIGHTS = "DepthJetQhd/model_final.pth"
-    # dataloader = build_detection_train_loader(cfg, mapper=mapper)
     gn = GatingNetwork(cfg, cfg_depth)
     # train only linear
     for param in gn.parameters():
@@ -94,9 +71,6 @@ if __name__=="__main__":
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=20, shuffle=True, num_workers=4,collate_fn =collate_fn)
 
-
-    # depth = image_process('docs/input.jpg',cfg)
-    # rgb = image_process('docs/input.jpg',cfg)
     it = iter(dataloader)
     # g = next(it)
     for epoch in range(1,10):
@@ -112,5 +86,5 @@ if __name__=="__main__":
         save_name = os.path.join(cfg.OUTPUT_DIR, 'Gatingnet_{}.pth'.format( epoch))
         gn_param = {"weights":gn.weight, "bias":gn.bias, "epoch":epoch}
         torch.save(gn_param, save_name)
-        print('done')
+    print('done')
     exit(0)

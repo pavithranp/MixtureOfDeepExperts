@@ -15,7 +15,7 @@ from detectron2.structures import ImageList
 import torch ,cv2
 from torch import nn
 import numpy as np
-from network import custom_proposal_generator
+from network import GatingRPN
 # PATH = '../model/faster-RCNN_FPN.pth'
 
 # with torch.no_grad():
@@ -60,7 +60,6 @@ class Gating_ROIHeads(nn.Module):
         with torch.no_grad():
             # return self.model(inputs)[0]
             self.model1.proposal_generator.training = False
-            targets = self.get_targets(x1)
             images1 = self.preprocess_image(x1,'rgb_image')  # don't forget to preprocess
             features1 = self.model1.backbone(images1.tensor)  # set of cnn features
             proposals1, _ = self.model1.proposal_generator(images1, features1, None)  # RPN
@@ -83,7 +82,7 @@ class Gating_ROIHeads(nn.Module):
                 targets = self.get_targets(x1)
                 assert targets
                 proposals = self.model1.roi_heads.label_and_sample_proposals(proposals, targets)
-            del targets
+                del targets
             features1_ = [features1[f] for f in self.model1.roi_heads.in_features]
             features2_ = [features2[f] for f in self.model2.roi_heads.in_features]
 
@@ -121,7 +120,7 @@ class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
         super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
-        # self.model.eval()
+        self.model.eval()
         self.training = False
     def forward(self,scores, proposal_deltas, proposals, features,images,batch_inputs):
 
