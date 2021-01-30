@@ -20,12 +20,12 @@ from detectron2.config import get_cfg
 
 
 class Dataset():
-    def __init__(self, args):
+    def __init__(self, args,root = "/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD"):
         self.dataset_name = 'InOutDoorDepth'
-        self._dataset = "/no_backups/d1386/InOutDoorPeopleRGBD/"+args
-        self._image_set_path = "/no_backups/d1386/InOutDoorPeopleRGBD/ImageSets/"
+        self._dataset = os.path.join(root,args)
+        self._image_set_path = os.path.join(root,"ImageSets")
         self._image_set = 'train'
-        self._annotation_path = "/no_backups/d1386/InOutDoorPeopleRGBD/Annotations/"
+        self._annotation_path =  os.path.join(root,"Annotations")
 
         #        self._dataset = args.dataset_path
         #        self._image_set_path = args.image_set_path
