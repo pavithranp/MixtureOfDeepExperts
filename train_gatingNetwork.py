@@ -4,22 +4,10 @@ from detectron2 import model_zoo
 import os, torch,cv2, copy
 import detectron2.data.transforms as T
 from dataloader.torch_dataloader import RGBD
-from detectron2.structures import BoxMode
 from detectron2.data import detection_utils as utils
 from detectron2.utils.events import EventStorage
 
-def collate_fn(batch):
-    for x in batch:
-        objs =[]
-        for box in x['target']['boxes']:
-            obj = {
-                "bbox": [box[0], box[1],box[2],box[3]],
-                "bbox_mode": BoxMode.XYXY_ABS,
-                "category_id": 1
-                }
-            objs.append(obj)
-        x['instances'] = utils.annotations_to_instances(objs, (540,960))
-    return batch # Show how to implement a minimal mapper, similar to the default DatasetMapper
+
 def mapper(dataset_dict):
     dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
     # can use other ways to read image
@@ -69,7 +57,7 @@ if __name__=="__main__":
     dataset = RGBD('/no_backups/d1386/InOutDoorPeopleRGBD')
 
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=20, shuffle=True, num_workers=4,collate_fn =collate_fn)
+        dataset, batch_size=20, shuffle=True, num_workers=4,collate_fn =dataset.collate_fn)
 
     it = iter(dataloader)
     # g = next(it)

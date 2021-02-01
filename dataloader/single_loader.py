@@ -1,27 +1,24 @@
 from __future__ import print_function, division
 import yaml
-from detectron2.data import detection_utils as utils
-from detectron2.structures import BoxMode
-from torchvision import transforms, utils
-
 import os ,cv2
-import numpy as np
 import torch
 from detectron2.data import detection_utils as utils
 
+from detectron2.structures import BoxMode
 
-class RGBD(object):
-    def __init__(self, root, transforms =None):
+class SingleDataset(object):
+    def __init__(self, root,dataset = 'ImagesQ_hd', set ='train',transforms =None,grad=True):
         self.root = root
+        self.grad = grad
         self.transforms = transforms
         # load all image files, sorting them to
         # ensure that they are aligned
-        self.rgb_imgs = list(sorted(os.listdir(os.path.join(root, "ImagesQhd"))))
-        self.annon_imgs = list(sorted(os.listdir(os.path.join(root, "Annotations"))))
-        self.depth_imgs = list(sorted(os.listdir(os.path.join(root, "DepthJetQhd"))))
+        self.dataset_path = dataset
+        # self.list_imgs = list(sorted(os.listdir(os.path.join(root, dataset))))
+        # self.annon_imgs = list(sorted(os.listdir(os.path.join(root, "Annotations"))))
         self.files=[]
         self._image_set_path = os.path.join(root, "ImageSets")
-        with open(os.path.join(self._image_set_path, 'train.txt')) as annon_file:
+        with open(os.path.join(self._image_set_path, set+'.txt')) as annon_file:
             for x in annon_file:
                 annon = self.read_annon_file(os.path.join(root,'Annotations',x[:-1]+'.yml'))
                 if 'object' in annon:
@@ -29,16 +26,10 @@ class RGBD(object):
 
     def __getitem__(self, idx):
         # load images ad masks
-        rgb_path = os.path.join(self.root, "ImagesQhd", self.files[idx]+'.png')
-        depth_path = os.path.join(self.root, "DepthJetQhd", self.files[idx]+'.png')
+        image_path = os.path.join(self.root, self.dataset_path, self.files[idx]+'.png')
         annon_path = os.path.join(self.root, "Annotations", self.files[idx]+'.yml')
-        rgb = self.image_process(rgb_path)
-        depth = self.image_process(depth_path)
+        image = self.image_process(image_path)
         annon = self.read_annon_file(annon_path)
-        # convert the PIL Image into a numpy array
-
-        # get bounding box coordinates for each mask
-        # if 'object' in annon:
         objects = annon['object']
 
         num_objs = len(objects)
@@ -59,9 +50,9 @@ class RGBD(object):
         target["labels"] = labels
 
         if self.transforms is not None:
-            rgb, target = self.transforms(rgb, target)
+            rgb, target = self.transforms(image, target)
 
-        return {'rgb_image':rgb, 'depth_image':depth , 'height':540, 'width': 960, 'target':  target}
+        return {'image':image, 'height':540, 'width': 960, 'target':  target}
 
     def __len__(self):
         return len(self.files)
@@ -77,8 +68,8 @@ class RGBD(object):
                     "category_id": 1
                 }
                 objs.append(obj)
-            x['instances'] = utils.annotations_to_instances(objs, (540, 960))
-        return batch  # Show how to implement a minimal mapper, similar to the default DatasetMapper
+            # x['instances'] = utils.annotations_to_instances(objs, (540, 960))
+        return batch
 
     @staticmethod
     def read_annon_file(file):
@@ -88,8 +79,8 @@ class RGBD(object):
                 _ = infile.readline()
             return yaml.load(infile, Loader=yaml.FullLoader)
 
-    @staticmethod
-    def image_process(path):
+
+    def image_process(self,path):
         image = cv2.imread(path)
-        image = torch.tensor(image.transpose(2, 0, 1), requires_grad=True, dtype=torch.float32)
+        image = torch.tensor(image.transpose(2, 0, 1), requires_grad=self.grad, dtype=torch.float32)
         return image
