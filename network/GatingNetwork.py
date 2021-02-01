@@ -120,6 +120,8 @@ class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
         super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
+        checkpointer = DetectionCheckpointer(self.model)
+        checkpointer.load(self.cfg.MODEL.WEIGHTS)
         self.model.eval()
         self.training = False
     def forward(self,scores, proposal_deltas, proposals, features,images,batch_inputs):

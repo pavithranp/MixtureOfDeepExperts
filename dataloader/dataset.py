@@ -2,29 +2,24 @@
 # from detectron2.data.datasets import register_coco_instances
 # register_coco_instances("my_dataset_train", {}, "json_annotation_train.json", "path/to/image/dir")
 # register_coco_instances("my_dataset_val", {}, "json_annotation_val.json", "path/to/image/dir")
-from detectron2.structures import BoxMode
-from detectron2.data import MetadataCatalog, DatasetCatalog
-from detectron2.utils.visualizer import Visualizer
 import cv2
 import os
-import numpy as np
-import yaml
-import numpy as np
-import os, json, cv2, random
+import random
 
+import yaml
+from detectron2.data import MetadataCatalog, DatasetCatalog
+from detectron2.structures import BoxMode
+from detectron2.utils.visualizer import Visualizer
 # import some common detectron2 utilities
-from detectron2.engine import DefaultTrainer
-from detectron2 import model_zoo
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
+from tqdm import tqdm
 
 
 class Dataset():
-    def __init__(self, args,root = "/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD"):
+    def __init__(self, args,root = "/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD",set='train'):
         self.dataset_name = 'InOutDoorDepth'
         self._dataset = os.path.join(root,args)
         self._image_set_path = os.path.join(root,"ImageSets")
-        self._image_set = 'train'
+        self._image_set = set
         self._annotation_path =  os.path.join(root,"Annotations")
 
         #        self._dataset = args.dataset_path
@@ -37,14 +32,14 @@ class Dataset():
 
     def load_annotations(self):
         # self._image_set = set
-        with open(self._image_set_path + self._image_set + '.txt') as annon_file:
+        with open(os.path.join(self._image_set_path , self._image_set + '.txt')) as annon_file:
             size =0
-            for line in annon_file:
-                x = self.read_annon_file(self._annotation_path + line[:-1] + '.yml')
+            for line in tqdm(annon_file):
+                x = self.read_annon_file(os.path.join(self._annotation_path , line[:-1] + '.yml'))
                 record = {"image_id": x['filename'][:-4]}
                 record["file_name"] = self._dataset + record['image_id']+'.png'
-                image = cv2.imread(record["file_name"])
-                record["height"],record["width"],_ = image.shape
+                # image = cv2.imread(record["file_name"])
+                record["height"],record["width"] = 540,960
                 # record["width"] = 960
                 if not 'object' in x:
                     continue
@@ -63,13 +58,13 @@ class Dataset():
                 record["annotations"] = objs
                 self.dataset_dicts.append(record)
             print("Dataset contains : ", size, "elements for ",self._image_set)
-            return self.dataset_dicts
+        return self.dataset_dicts
 
     def register_dataset(self):
-        for d in ["train"]:
+        for d in ["train","val"]:
             self._image_set = d
             DatasetCatalog.register(self.dataset_name + "_" + d, self.load_annotations)
-            MetadataCatalog.get(self.dataset_name + "_" + d).set(thing_classes=["Pedestrians"])
+            self.meta = MetadataCatalog.get(self.dataset_name + "_" + d).set(thing_classes=["Pedestrians"])
 
     @staticmethod
     def read_annon_file(file):
@@ -93,7 +88,4 @@ class Dataset():
 
 if __name__ == "__main__":
     args = []
-    # x.load_annotations('train')
-
-
-
+    # x.load_annotations('t
