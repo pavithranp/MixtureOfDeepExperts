@@ -5,18 +5,161 @@ import random
 from dataloader.single_loader import SingleDataset
 # from tqdm import tqdm
 import cv2 ,os
+import math,torch
+import numpy as np
+import operator
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from dataloader.dataset import Dataset
+from detectron2.modeling import build_model
+from detectron2.checkpoint import DetectionCheckpointer
+from utils.eval import bb_intersection_over_union, f1_score, voc_ap, compute_mAP, intersection_dist, read_gt
+import pickle
+SOFTMAX_THRESHOLD = 0.5
+
+
+def evaluate(sorted_dict, groundtruth, number_of_groundtruth_boxes, threshold=0.6):
+    print('IoU-Threshold,\t{0}'.format(threshold))
+    print('Softmax-Threshold,\t{0}'.format(SOFTMAX_THRESHOLD))
+    tp = 0
+    fp = 0
+    fn = 0
+    precisionList = []
+    recallList = []
+    true_positive_difference = []
+    iou_true_positives = []
+
+    val_diff = []
+
+    for indice, obj in enumerate(sorted_dict):
+        if len(obj) == 6:
+            score, img_name, xmin, ymin, xmax, ymax = obj
+        elif len(obj) == 8:
+            score, img_name, xmin, ymin, xmax, ymax, gating_factor_1, gating_factor_2 = obj
+        else:
+            print('len(obj) not known')
+            break
+
+        testBB = [int(xmin), int(ymin), int(xmax), int(ymax)]
+        if img_name in groundtruth:
+            # get the groundtruth boxes
+            gtBB = groundtruth[img_name]
+            # val_old = -1
+            for i in range(0, len(gtBB)):
+                val = bb_intersection_over_union(gtBB[i], testBB)
+                # val_old = interUnio(gtBB[i], testBB)
+
+                # if val != val_old:
+                #     val_diff.append(val-val_old)
+                if val >= threshold:
+                    tp = tp + 1
+                    true_positive_difference.append(
+                        np.array(gtBB[i]) - np.array(testBB)
+                    )
+                    iou_true_positives.append(val)
+
+                    # remove the box as we have found it
+                    del gtBB[i]
+                    break
+
+            else:  # for loop fell through
+                fp = fp + 1
+            if (tp + fp) == 0:  # if first matched person is occluded
+                print('hack, fixme, first matched person is occluded')
+                continue
+        else:
+            fp = fp + 1
+        precisionList.append(float(tp) / float((tp + fp)))
+        recallList.append(float(tp) / float(number_of_groundtruth_boxes))
+
+    print("tp,\t{0}".format(tp))
+    print("fp,\t{0}".format(fp))
+    print("fn,\t{0}".format(fn))
+    print("precision,\t{0}".format(precisionList[-1]))
+    print("recall,\t{0}".format(recallList[-1]))
+    print("f1 score,\t{0}".format(f1_score(precisionList[-1], recallList[-1])))
+    print('avg iou tp,\t{0}'.format(np.mean(iou_true_positives)))
+
+
+    eer_x = None
+    eer_y = None
+    for i in range(0, len(precisionList) - 1):
+        dist = intersection_dist(recallList[i], precisionList[i] + 0.000001, recallList[i + 1],
+                                     precisionList[i + 1], 0.0, 0.0, 1.0, 1.0)
+        if dist:
+            eer_x = math.sin(np.pi / 4) * dist
+            eer_y = math.cos(np.pi / 4) * dist
+            print('EER:, {0}, {1}'.format(eer_x, eer_y))
+            break
+    else:
+        print('EER:, computation did not find an intersection')
+
+    ap_voc_2007 = voc_ap(np.asarray(recallList), np.asarray(precisionList), True)
+    ap_voc_2010 = voc_ap(np.asarray(recallList), np.asarray(precisionList), False)
+    m_ap = compute_mAP(precisionList, recallList)
+    print('Medium average Precision (Legacy),\t{0}'.format(m_ap))
+    # Recall at AP value, we get the index of the element
+    recall_map_voc_2007 = min(range(len(precisionList)), key=lambda i: abs(precisionList[i] - ap_voc_2007))
+    recall_map_voc_2010 = min(range(len(precisionList)), key=lambda i: abs(precisionList[i] - ap_voc_2010))
+    print('Medium average Precision (VOC2007),\t{0}'.format(ap_voc_2007))
+    print('Recall at maP (VOC2007),\t{0}'.format(recallList[recall_map_voc_2007]))
+    print('Medium average Precision (VOC2010),\t{0}'.format(ap_voc_2010))
+    print('Recall at maP (VOC2010),\t{0}'.format(recallList[recall_map_voc_2010]))
+
+
+def readAndSortBBs(prediction,gt):
+    # global numOfGTBBs
+    groundtruth_boxes = gt
+    lines_boxes = prediction
+    imgsNoPerson = []
+
+    for res in lines_boxes.items():
+        imgName = res[0]
+        bboxes = res[1][0]
+        # gating_factor_1, gating_factor_2 = res[2][0], res[2][1]
+
+        # imgName = splittedLine[0][:-16] # for rgb -4, else 16, 0 for rcnn
+        if imgName not in groundtruth_boxes:
+            print('No person annotation in: ', imgName)
+            imgsNoPerson.append(imgName)
+
+        if len(bboxes) == 0:
+            # noDetectionList.append(imgName)
+            break
+        for i in range(0, len(bboxes)):
+            tmp_softmax_value = float(res[1][1][i])
+            if tmp_softmax_value > SOFTMAX_THRESHOLD:
+                tmp_entry = [str(0.0), imgName, bboxes[i][0], bboxes[i][1], bboxes[i][2], bboxes[i][3]]
+                # This normalization is only required as we compute our bounding boxes on the full-hd resolution
+                # tmp_entry[2] = str(int(int(tmp_entry[2]) / 2.))
+                # tmp_entry[3] = str(int(int(tmp_entry[3]) / 2.))
+                # tmp_entry[4] = str(int(int(tmp_entry[4]) / 2.))
+                # tmp_entry[5] = str(int(int(tmp_entry[5]) / 2.))
+
+                # tmp_entry += [res[2][0], res[2][1]]
+
+                if tmp_softmax_value >= 0.01:
+                    tmp_entry[0] = tmp_softmax_value
+                sortedListTestBB.append(tuple(tmp_entry))
+
+    return sorted(sortedListTestBB, key=operator.itemgetter(0), reverse=True), imgsNoPerson
+
+def get_dicts(d,output):
+    # bboxes = output['instances'].
+
+    bboxes = [[y for y in x] for x in output['instances'].pred_boxes.tensor.cpu().numpy()]
+    scores = [x for x in output['instances'].scores.cpu().numpy()]
+    return [d,bboxes,scores]
 
 if __name__ == "__main__":
 
     val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',dataset='ImagesQ_hd',
                                     set='val',grad=True)
-
-    args = "DepthJetQhd/"
-    x = Dataset(args)
+    sortedListTestBB =[]
+    args="ImagesQ_hd/" # change to ImagesQhd/
+    # args = "DepthJetQhd/"
+    # x = Dataset(args)
     cfg = get_cfg()
     model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
     cfg.merge_from_file(model_zoo.get_config_file(model))
@@ -25,79 +168,54 @@ if __name__ == "__main__":
     cfg.DATASETS.TEST = ()
     cfg.OUTPUT_DIR = 'output/'
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/model_final.pth'
+    cfg.MODEL.WEIGHTS = 'output/rgb.pth'
     cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
     cfg.SOLVER.MAX_ITER = 10000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 50  # faster, and good enough for this toy dataset (default: 512)
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
     cfg.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 3000
-    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 3000
+    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 5000
     cfg.MODEL.RPN.POST_NMS_TOPK_TRAIN = 500
-    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 500
-    predictor = DefaultPredictor(cfg)
-
-    outputs = []
-    dataset_dicts = x.load_annotations()
-    for d in val_dataset.files:
-        im = cv2.imread(os.path.join(val_dataset.root,val_dataset.dataset_path,d+'.png'))
-        output = predictor(im)
-        outputs.append(output)
+    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
+    model = build_model(cfg)
 
 
-# def evaluate(test_loader, model):
-#     """
-#     Evaluate.
-#
-#     :param test_loader: DataLoader for test data
-#     :param model: model
-#     """
-#
-#     # Make sure it's in eval mode
-#     model.eval()
-#
-#     # Lists to store detected and true boxes, labels, scores
-#     det_boxes = list()
-#     det_labels = list()
-#     det_scores = list()
-#     true_boxes = list()
-#     true_labels = list()
-#     true_difficulties = list()  # it is necessary to know which objects are 'difficult', see 'calculate_mAP' in utils.py
-#
-#     with torch.no_grad():
-#         # Batches
-#         for i, (images, boxes, labels, difficulties) in enumerate(tqdm(test_loader, desc='Evaluating')):
-#             images = images.to(device)  # (N, 3, 300, 300)
-#
-#             # Forward prop.
-#             predicted_locs, predicted_scores = model(images)
-#
-#             # Detect objects in SSD output
-#             det_boxes_batch, det_labels_batch, det_scores_batch = model.detect_objects(predicted_locs, predicted_scores,
-#                                                                                        min_score=0.01, max_overlap=0.45,
-#                                                                                        top_k=200)
-#             # Evaluation MUST be at min_score=0.01, max_overlap=0.45, top_k=200 for fair comparision with the paper's results and other repos
-#
-#             # Store this batch's results for mAP calculation
-#             boxes = [b.to(device) for b in boxes]
-#             labels = [l.to(device) for l in labels]
-#             difficulties = [d.to(device) for d in difficulties]
-#
-#             det_boxes.extend(det_boxes_batch)
-#             det_labels.extend(det_labels_batch)
-#             det_scores.extend(det_scores_batch)
-#             true_boxes.extend(boxes)
-#             true_labels.extend(labels)
-#             true_difficulties.extend(difficulties)
-#
-#         # Calculate mAP
-#         APs, mAP = calculate_mAP(det_boxes, det_labels, det_scores, true_boxes, true_labels, true_difficulties)
-#
-#     # Print AP for each class
-#     pp.pprint(APs)
-#
-#     print('\nMean Average Precision (mAP): %.3f' % mAP)
+    # predictor = DefaultPredictor(cfg)
+    if not os.path.exists('pred.pkl'):
+        checkpointer = DetectionCheckpointer(model)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
+        model.eval()
+        outputs = []
+        predictions = {}
+        # dataset_dicts = x.load_annotations()
+        with torch.no_grad():
+            for d in val_dataset.files:
+                im = cv2.imread(os.path.join(val_dataset.root,val_dataset.dataset_path,d+'.png'))
+                image = torch.as_tensor(im.transpose(2, 0, 1), dtype=torch.float32)
+                output = model([{'image':image,'height': 540,'width':960 }])
+                pred = get_dicts(d,output[0])
+                predictions[pred[0]]= [pred[1],pred[2]]
+
+        with open("pred.pkl", "wb")  as out :
+            pickle.dump(predictions, out)
+    else:
+        with open("pred.pkl", "rb")  as out:
+            predictions = pickle.load(out)
 
 
-# if __name__ == '__main__':
-#     evaluate(test_loader, model)
+
+    # print(outputs)
+    groundtruth_boxes = read_gt()
+    number_of_groundtruth_boxes = sum([len(groundtruth_boxes[x]) for x in groundtruth_boxes.keys() if x in predictions.keys()])
+    j,k = readAndSortBBs(predictions,groundtruth_boxes)
+    evaluate(j, groundtruth_boxes, number_of_groundtruth_boxes, threshold=0.6)
+
+    SOFTMAX_THRESHOLD = 0.6
+
+
+
+
+
+
+
