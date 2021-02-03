@@ -30,8 +30,6 @@ def evaluate(sorted_dict, groundtruth, number_of_groundtruth_boxes, threshold=0.
     true_positive_difference = []
     iou_true_positives = []
 
-    val_diff = []
-
     for indice, obj in enumerate(sorted_dict):
         if len(obj) == 6:
             score, img_name, xmin, ymin, xmax, ymax = obj
@@ -154,11 +152,11 @@ def get_dicts(d,output):
 
 if __name__ == "__main__":
 
-    val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',dataset='ImagesQ_hd',
-                                    set='val',grad=True)
+    val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',dataset='DepthJetQhd',
+                                    set='test',grad=True)
     sortedListTestBB =[]
-    args="ImagesQ_hd/" # change to ImagesQhd/
-    # args = "DepthJetQhd/"
+    # args="ImagesQ_hd/" # change to ImagesQhd/
+    args = "DepthJetQhd/"
     # x = Dataset(args)
     cfg = get_cfg()
     model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
@@ -168,27 +166,28 @@ if __name__ == "__main__":
     cfg.DATASETS.TEST = ()
     cfg.OUTPUT_DIR = 'output/'
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/rgb.pth'
+    cfg.MODEL.WEIGHTS = 'output/model_0019999.pth'
     cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
     cfg.SOLVER.MAX_ITER = 10000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 50  # faster, and good enough for this toy dataset (default: 512)
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
     cfg.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 3000
-    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 5000
+    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 3000
     cfg.MODEL.RPN.POST_NMS_TOPK_TRAIN = 500
-    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 1000
+    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 500
     model = build_model(cfg)
 
 
     # predictor = DefaultPredictor(cfg)
-    if not os.path.exists('pred.pkl'):
+    if not os.path.exists("depth_pred.pkl"):
         checkpointer = DetectionCheckpointer(model)
         checkpointer.load(cfg.MODEL.WEIGHTS)
         model.eval()
         outputs = []
         predictions = {}
         # dataset_dicts = x.load_annotations()
+        print("validating with:",len(val_dataset.files))
         with torch.no_grad():
             for d in val_dataset.files:
                 im = cv2.imread(os.path.join(val_dataset.root,val_dataset.dataset_path,d+'.png'))
@@ -197,13 +196,11 @@ if __name__ == "__main__":
                 pred = get_dicts(d,output[0])
                 predictions[pred[0]]= [pred[1],pred[2]]
 
-        with open("pred.pkl", "wb")  as out :
+        with open("depth_pred.pkl", "wb")  as out :
             pickle.dump(predictions, out)
     else:
-        with open("pred.pkl", "rb")  as out:
+        with open("depth_pred.pkl", "rb")  as out:
             predictions = pickle.load(out)
-
-
 
     # print(outputs)
     groundtruth_boxes = read_gt()

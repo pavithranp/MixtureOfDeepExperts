@@ -49,7 +49,7 @@ class Dataset():
                 for anno in objects:
                     bndbox = anno["bndbox"]
                     obj = {
-                        "bbox": [float(bndbox['xmin']), float(bndbox['ymin']), float(bndbox['xmax']), float(bndbox['ymax'])],
+                        "bbox": [float(bndbox['xmin'])*0.5, float(bndbox['ymin'])*0.5, float(bndbox['xmax'])*0.5, float(bndbox['ymax'])*0.5],
                         "bbox_mode": BoxMode.XYXY_ABS,
                         # "objectness_logits": 1.0,
                         "category_id": 0,

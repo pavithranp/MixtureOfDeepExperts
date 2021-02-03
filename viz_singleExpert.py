@@ -1,5 +1,6 @@
 import random
-
+# import some common detectron2 utilities
+from detectron2.utils.visualizer import Visualizer
 import cv2
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
@@ -18,7 +19,7 @@ if __name__=="__main__":
     cfg.DATASETS.TEST = ()
     cfg.OUTPUT_DIR = args
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/model_final.pth'
+    cfg.MODEL.WEIGHTS = 'DepthJetQhd/model_final.pth'
     cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
     cfg.SOLVER.MAX_ITER = 10000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
@@ -29,16 +30,17 @@ if __name__=="__main__":
 
     from detectron2.utils.visualizer import ColorMode
     dataset_dicts = x.load_annotations()
-    for d in random.sample(dataset_dicts, 60):
-        im = cv2.imread(d["file_name"])
+    for d in random.sample(dataset_dicts, 1):
+        # im = cv2.imread(d["file_name"])
+        im = cv2.imread('/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD/DepthJetQhd/seq_1454085791.0435234190.png')
         outputs = predictor(im)
         # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
-        # v = Visualizer(im[:, :, ::-1],
-        #                metadata=x.meta,
-        #                scale=0.5,
-        #                instance_mode=ColorMode.IMAGE_BW
-        #                # remove the colors of unsegmented pixels. This option is only available for segmentation models
-        #                )
-        # out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-        # cv2.imshow('test',out.get_image()[:, :, ::-1])
-    cv2.waitKey(0)
+        v = Visualizer(im[:, :, ::-1],
+                       metadata=x.meta,
+                       scale=0.5,
+                       instance_mode=ColorMode.IMAGE_BW
+                       # remove the colors of unsegmented pixels. This option is only available for segmentation models
+                       )
+        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        cv2.imshow('test',out.get_image()[:, :, ::-1])
+        cv2.waitKey(0)
