@@ -104,37 +104,3 @@ def compute_mAP(precisionList, recallList):
 
 def f1_score(precision, recall):
     return 2 * ((precision* recall)/(precision+recall))
-
-def readAndSortBBs(DIR_IN, groundtruth_boxes):
-    # global numOfGTBBs
-
-    for res in lines_boxes:
-        imgName = res[0]
-        bboxes = res[1]
-        gating_factor_1, gating_factor_2 = res[2][0], res[2][1]
-
-        # imgName = splittedLine[0][:-16] # for rgb -4, else 16, 0 for rcnn
-        if imgName in imgsNoPerson:
-            print('No person annotation in: ', imgName)
-            pass
-
-        if len(bboxes) == 0:
-            noDetectionList.append(imgName)
-        for i in xrange(0, len(bboxes), 5):
-            tmp_softmax_value = float(bboxes[i + 4][:-1])
-            #  Johannes: changed threshold as gating leads to softmax values of 0.5
-            if tmp_softmax_value > SOFTMAX_THRESHOLD:
-                tmp_entry = [str(0.0), imgName, bboxes[i + 1], bboxes[i], bboxes[i + 3], bboxes[i + 2]]
-                # This normalization is only required as we compute our bounding boxes on the full-hd resolution
-                tmp_entry[2] = str(int(int(tmp_entry[2]) / 2.))
-                tmp_entry[3] = str(int(int(tmp_entry[3]) / 2.))
-                tmp_entry[4] = str(int(int(tmp_entry[4]) / 2.))
-                tmp_entry[5] = str(int(int(tmp_entry[5]) / 2.))
-
-                tmp_entry += [res[2][0], res[2][1]]
-
-                if tmp_softmax_value >= 0.01:
-                    tmp_entry[0] = tmp_softmax_value
-                sortedListTestBB.append(tuple(tmp_entry))
-
-    return sorted(sortedListTestBB, key=operator.itemgetter(0), reverse=True), imgsNoPerson

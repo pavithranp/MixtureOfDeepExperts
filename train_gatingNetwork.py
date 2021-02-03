@@ -54,7 +54,7 @@ if __name__=="__main__":
     gn.set_training(True)
     params = [gn.weight]+  [gn.bias]
     optimizer = torch.optim.Adam(params)
-    dataset = RGBD('/no_backups/d1386/InOutDoorPeopleRGBD')
+    dataset = RGBD('/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD')
 
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=20, shuffle=True, num_workers=4,collate_fn =dataset.collate_fn)

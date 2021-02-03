@@ -12,14 +12,15 @@ def image_process(path1,path2,cfg):
     aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
     image1 = cv2.imread(path1)
     height, width = image1.shape[:2]
-    image1 = aug.get_transform(image1).apply_image(image1)
-    image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
+    # image1 = aug.get_transform(image1).apply_image(image1)
+    # image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
 
     image2 = cv2.imread(path1)
     height, width = image2.shape[:2]
-    image2 = aug.get_transform(image2).apply_image(image2)
-    image2 = torch.as_tensor(image2.astype("float32").transpose(2, 0, 1))
-
+    # image2 = aug.get_transform(image2).apply_image(image2)
+    # image2 = torch.as_tensor(image2.astype("float32").transpose(2, 0, 1))
+    image1 = torch.as_tensor(image1.transpose(2, 0, 1), dtype=torch.float32)
+    image2 = torch.as_tensor(image2.transpose(2, 0, 1), dtype=torch.float32)
     return [{"rgb_image": image1,"depth_image": image2, "height": height, "width": width}]
 
 cfg = get_cfg()
@@ -37,13 +38,13 @@ cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 
 # cfg.MODEL.WEIGHTS = "output_RGB/model_final.pth"
 
-model = build_model(cfg)
+# model = build_model(cfg)
 cfg2 = cfg.clone()
-cfg.MODEL.WEIGHTS = "output/model_final.pth"
-cfg2.MODEL.WEIGHTS = "DepthJetQhd/model_final.pth"
-rgb = image_process('docs/image.png','docs/depthJet.png',cfg)
+cfg.MODEL.WEIGHTS = "output/rgb.pth"
+cfg2.MODEL.WEIGHTS = "output/model_0019999.pth"
+rgb = image_process('docs/imagehd.png','docs/depthJet.png',cfg)
 # depth = image_process(,cfg2)
-model.eval()
+# model.eval()
 with torch.no_grad():
 #     pred = model(input)[0]
 
@@ -51,9 +52,10 @@ with torch.no_grad():
     # # cfg.MODEL.WEIGHTS = "output/model_final.pth"
     # Depth_network = FRCNN_ROIHeads(cfg)
     # x = RGBD_network(rgb,depth)
-    gn = GatingNetwork(cfg,cfg)
+    gn = GatingNetwork(cfg,cfg2)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
-    gn(rgb)
+    for i in range(5):
+        print(gn(rgb))
 
 

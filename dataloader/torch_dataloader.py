@@ -16,7 +16,7 @@ class RGBD(object):
         self.transforms = transforms
         # load all image files, sorting them to
         # ensure that they are aligned
-        self.rgb_imgs = list(sorted(os.listdir(os.path.join(root, "ImagesQhd"))))
+        self.rgb_imgs = list(sorted(os.listdir(os.path.join(root, "ImagesQ_hd"))))
         self.annon_imgs = list(sorted(os.listdir(os.path.join(root, "Annotations"))))
         self.depth_imgs = list(sorted(os.listdir(os.path.join(root, "DepthJetQhd"))))
         self.files=[]
