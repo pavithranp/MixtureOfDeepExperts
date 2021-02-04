@@ -1,22 +1,17 @@
-import random
-
-# import some common detectron2 utilities
-# from detectron2.utils.visualizer import Visualizer
-from dataloader.single_loader import SingleDataset
 # from tqdm import tqdm
-import cv2 ,os
-import math,torch
-import numpy as np
+import math,os
+from dataloader.single_loader import SingleDataset
+import detectron2.data.transforms as T
 import operator
-from detectron2 import model_zoo
-from detectron2.config import get_cfg
-from detectron2.engine import DefaultPredictor
-from dataloader.dataset import Dataset
-from detectron2.modeling import build_model
-from detectron2.checkpoint import DetectionCheckpointer
-from utils.eval import bb_intersection_over_union, f1_score, voc_ap, compute_mAP, intersection_dist, read_gt
-import pickle
+import cv2
+import numpy as np
+
 SOFTMAX_THRESHOLD = 0.5
+from network.GatingNetwork import  GatingNetwork
+from detectron2.config import get_cfg
+from detectron2 import model_zoo
+import torch ,pickle
+from utils.eval import bb_intersection_over_union, f1_score, voc_ap, compute_mAP, intersection_dist,read_gt
 
 
 def evaluate(sorted_dict, groundtruth, number_of_groundtruth_boxes, threshold=0.6):
@@ -39,6 +34,7 @@ def evaluate(sorted_dict, groundtruth, number_of_groundtruth_boxes, threshold=0.
             print('len(obj) not known')
             break
 
+        # testBB = [int(xmin)/2, int(ymin)/2, int(xmax)/2, int(ymax)/2]
         testBB = [int(xmin), int(ymin), int(xmax), int(ymax)]
         if img_name in groundtruth:
             # get the groundtruth boxes
@@ -150,69 +146,80 @@ def get_dicts(d,output):
     scores = [x for x in output['instances'].scores.cpu().numpy()]
     return [d,bboxes,scores]
 
-if __name__ == "__main__":
+def image_process(path1,path2,cfg):
+    aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
+    image1 = cv2.imread(path1)
+    image1 = aug.get_transform(image1).apply_image(image1)
+    image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
+    # image1 = cv2.resize(image1,(1920,1080))
+    image2 = cv2.imread(path2)
+    # image2 = cv2.resize(image2, (1920,1080))
+    height, width = image2.shape[:2]
 
-    val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',dataset='DepthJetQhd',
-                                    set='test',grad=True)
-    sortedListTestBB =[]
-    # args="ImagesQ_hd/" # change to ImagesQhd/
-    args = "DepthJetQhd/"
-    # x = Dataset(args)
+    image2 = aug.get_transform(image2).apply_image(image2)
+    image2 = torch.as_tensor(image2.astype("float32").transpose(2, 0, 1))
+    # image1 = torch.as_tensor(image1.transpose(2, 0, 1), dtype=torch.float32)
+    # image2 = torch.as_tensor(image2.transpose(2, 0, 1), dtype=torch.float32)
+
+    return [{"rgb_image": image1,"depth_image": image2, "height": height, "width": width}]
+
+
+
+if __name__ =="__main__":
+    sortedListTestBB = []
+    val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD', dataset='DepthJetQhd',
+                                set='val', grad=True)
     cfg = get_cfg()
-    model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
-    cfg.merge_from_file(model_zoo.get_config_file(model))
+    cfg.merge_from_file(model_zoo.get_config_file("COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"))
     cfg.DATASETS.TRAIN = ("InOutDoorDepth_train",)
     print("InOutDoorDepth_train")
     cfg.DATASETS.TEST = ()
-    cfg.OUTPUT_DIR = 'output/'
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/model_0019999.pth'
+    cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_C4_3x.yaml")
     cfg.SOLVER.IMS_PER_BATCH = 2
     cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    cfg.SOLVER.MAX_ITER = 10000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 50  # faster, and good enough for this toy dataset (default: 512)
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-    cfg.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 3000
-    cfg.MODEL.RPN.PRE_NMS_TOPK_TEST = 3000
-    cfg.MODEL.RPN.POST_NMS_TOPK_TRAIN = 500
-    cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 500
-    model = build_model(cfg)
+    cfg.SOLVER.MAX_ITER = 5000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128   # faster, and good enough for this toy dataset (default: 512)
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 
+    # cfg.MODEL.WEIGHTS = "output_RGB/model_final.pth"
 
-    # predictor = DefaultPredictor(cfg)
-    if not os.path.exists("depth_pred.pkl"):
-        checkpointer = DetectionCheckpointer(model)
-        checkpointer.load(cfg.MODEL.WEIGHTS)
-        model.eval()
-        outputs = []
-        predictions = {}
-        # dataset_dicts = x.load_annotations()
-        print("validating with:",len(val_dataset.files))
-        with torch.no_grad():
-            for d in val_dataset.files:
-                im = cv2.imread(os.path.join(val_dataset.root,val_dataset.dataset_path,d+'.png'))
-                image = torch.as_tensor(im.transpose(2, 0, 1), dtype=torch.float32)
-                output = model([{'image':image,'height': 540,'width':960 }])
-                pred = get_dicts(d,output[0])
-                predictions[pred[0]]= [pred[1],pred[2]]
+    # model = build_model(cfg)
+    cfg2 = cfg.clone()
+    cfg.MODEL.WEIGHTS = "output/model_0029999.pth"
+    cfg2.MODEL.WEIGHTS = "output/model_0019999.pth"
 
-        with open("depth_pred.pkl", "wb")  as out :
+    predictions = {}
+    if not os.path.isfile("gating_pred.pkl"):
+        for d in val_dataset.files:
+        #     input = image_process(os.path.join(val_dataset.root, 'Images', d + '.png'), os.path.join(val_dataset.root, 'Images', d + '.png'), cfg)
+            input = image_process(os.path.join(val_dataset.root, 'ImagesQ_hd', d + '.png'),os.path.join(val_dataset.root, 'DepthJetQhd', d + '.png'), cfg2)
+            with torch.no_grad():
+                try:
+                    gn = GatingNetwork(cfg, cfg2)
+                    output = gn(input)
+                    print('done')
+                    pred = get_dicts(d, output[0])
+                    del output
+                    torch.cuda.empty_cache()
+                    predictions[pred[0]] = [pred[1], pred[2]]
+                except:
+                    print(d)
+                    continue
+        with open("gating_pred.pkl", "wb")  as out:
             pickle.dump(predictions, out)
     else:
-        with open("depth_pred.pkl", "rb")  as out:
+        with open("gating_pred.pkl", "rb")  as out:
             predictions = pickle.load(out)
 
     # print(outputs)
     groundtruth_boxes = read_gt()
-    number_of_groundtruth_boxes = sum([len(groundtruth_boxes[x]) for x in groundtruth_boxes.keys() if x in predictions.keys()])
-    j,k = readAndSortBBs(predictions,groundtruth_boxes)
+    number_of_groundtruth_boxes = sum(
+        [len(groundtruth_boxes[x]) for x in groundtruth_boxes.keys() if x in predictions.keys()])
+    j, k = readAndSortBBs(predictions, groundtruth_boxes)
     evaluate(j, groundtruth_boxes, number_of_groundtruth_boxes, threshold=0.6)
 
     SOFTMAX_THRESHOLD = 0.6
-
-
-
-
-
+        # torch.cuda.empty_cache()
 
 

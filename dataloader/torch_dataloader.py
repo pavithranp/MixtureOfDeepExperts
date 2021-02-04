@@ -21,7 +21,7 @@ class RGBD(object):
         self.depth_imgs = list(sorted(os.listdir(os.path.join(root, "DepthJetQhd"))))
         self.files=[]
         self._image_set_path = os.path.join(root, "ImageSets")
-        with open(os.path.join(self._image_set_path, 'train.txt')) as annon_file:
+        with open(os.path.join(self._image_set_path, 'test.txt')) as annon_file:
             for x in annon_file:
                 annon = self.read_annon_file(os.path.join(root,'Annotations',x[:-1]+'.yml'))
                 if 'object' in annon:
@@ -29,7 +29,7 @@ class RGBD(object):
 
     def __getitem__(self, idx):
         # load images ad masks
-        rgb_path = os.path.join(self.root, "ImagesQhd", self.files[idx]+'.png')
+        rgb_path = os.path.join(self.root, "ImagesQ_hd", self.files[idx]+'.png')
         depth_path = os.path.join(self.root, "DepthJetQhd", self.files[idx]+'.png')
         annon_path = os.path.join(self.root, "Annotations", self.files[idx]+'.yml')
         rgb = self.image_process(rgb_path)

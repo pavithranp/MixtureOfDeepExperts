@@ -35,6 +35,7 @@ def evaluate(sorted_dict, groundtruth, number_of_groundtruth_boxes, threshold=0.
             break
 
         testBB = [int(xmin)/2, int(ymin)/2, int(xmax)/2, int(ymax)/2]
+        # testBB = [int(xmin), int(ymin), int(xmax), int(ymax)]
         if img_name in groundtruth:
             # get the groundtruth boxes
             gtBB = groundtruth[img_name]
@@ -124,14 +125,6 @@ def readAndSortBBs(prediction,gt):
             tmp_softmax_value = float(res[1][1][i])
             if tmp_softmax_value > SOFTMAX_THRESHOLD:
                 tmp_entry = [str(0.0), imgName, bboxes[i][0], bboxes[i][1], bboxes[i][2], bboxes[i][3]]
-                # This normalization is only required as we compute our bounding boxes on the full-hd resolution
-                # tmp_entry[2] = str(int(int(tmp_entry[2]) / 2.))
-                # tmp_entry[3] = str(int(int(tmp_entry[3]) / 2.))
-                # tmp_entry[4] = str(int(int(tmp_entry[4]) / 2.))
-                # tmp_entry[5] = str(int(int(tmp_entry[5]) / 2.))
-
-                # tmp_entry += [res[2][0], res[2][1]]
-
                 if tmp_softmax_value >= 0.01:
                     tmp_entry[0] = tmp_softmax_value
                 sortedListTestBB.append(tuple(tmp_entry))
@@ -150,9 +143,9 @@ def image_process(path1,path2,cfg):
     image1 = cv2.imread(path1)
     # image1 = aug.get_transform(image1).apply_image(image1)
     # image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
-    # image1 = cv2.resize(image1,(1920,1080))
+    image1 = cv2.resize(image1,(1920,1080))
     image2 = cv2.imread(path2)
-    # image2 = cv2.resize(image2, (1920,1080))
+    image2 = cv2.resize(image2, (1920,1080))
     height, width = image2.shape[:2]
 
     # image2 = aug.get_transform(image2).apply_image(image2)
@@ -185,7 +178,7 @@ if __name__ =="__main__":
 
     # model = build_model(cfg)
     cfg2 = cfg.clone()
-    cfg.MODEL.WEIGHTS = "output/rgb.pth"
+    cfg.MODEL.WEIGHTS = "output/model_0024999.pth"
     cfg2.MODEL.WEIGHTS = "output/model_0019999.pth"
 
     predictions = {}
