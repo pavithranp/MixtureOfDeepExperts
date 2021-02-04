@@ -25,7 +25,7 @@ class Gating_ROIHeads(nn.Module):
     def __init__(self,cfg1,cfg2):
 
         super(Gating_ROIHeads, self).__init__()
-        self.model3 = build_model(cfg2)
+        # self.model3 = build_model(cfg2)
         cfg1.MODEL.PROPOSAL_GENERATOR.NAME = 'CustomRPN'
         cfg2.MODEL.PROPOSAL_GENERATOR.NAME = 'CustomRPN'
         cfg1.MODEL.RPN.PRE_NMS_TOPK_TRAIN = 3000
@@ -52,7 +52,7 @@ class Gating_ROIHeads(nn.Module):
         self.model1.eval()
         self.model2.eval()
         # self.model3.eval()
-        self.model3.training =True
+        # self.model3.training =True
         # for d in x1:
         #     d['image'] = d.pop('rgb_image')
         # out = self.model3(x1)[0]
@@ -120,6 +120,8 @@ class Gating_OutputLayer(nn.Module):
     def __init__(self,cfg):
         super(Gating_OutputLayer, self).__init__()
         self.model = build_model(cfg)
+        checkpointer = DetectionCheckpointer(self.model)
+        checkpointer.load(cfg.MODEL.WEIGHTS)
         self.model.eval()
         self.training = False
     def forward(self,scores, proposal_deltas, proposals, features,images,batch_inputs):
