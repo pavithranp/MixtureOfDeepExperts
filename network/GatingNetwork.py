@@ -157,6 +157,8 @@ class GatingNetwork(nn.Module):
         inputs = torch.cat([RGB_box_features,Depth_box_features ], dim=1)
         input = inputs.mean(dim=[2, 3])
         x = F.linear(input,self.weight,self.bias)
-        scores = x*RGBscores + (1-x)*DepthScores
+        xs = F.softmax(x,dim=1)
+
+        scores = RGBscores*xs[:,0][...,None] + DepthScores*xs[:,1][...,None]
 
         return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,image,x1)

@@ -11,11 +11,13 @@ from detectron2.checkpoint import DetectionCheckpointer
 def image_process(path1,path2,cfg):
     aug = T.ResizeShortestEdge([cfg.INPUT.MIN_SIZE_TEST, cfg.INPUT.MIN_SIZE_TEST], cfg.INPUT.MAX_SIZE_TEST)
     image1 = cv2.imread(path1)
+    image1 = cv2.resize(image1, (1920, 1080))
     height, width = image1.shape[:2]
     # image1 = aug.get_transform(image1).apply_image(image1)
     # image1 = torch.as_tensor(image1.astype("float32").transpose(2, 0, 1))
 
-    image2 = cv2.imread(path1)
+    image2 = cv2.imread(path2)
+    image2 = cv2.resize(image1, (1920, 1080))
     height, width = image2.shape[:2]
     # image2 = aug.get_transform(image2).apply_image(image2)
     # image2 = torch.as_tensor(image2.astype("float32").transpose(2, 0, 1))
@@ -40,7 +42,7 @@ cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
 
 # model = build_model(cfg)
 cfg2 = cfg.clone()
-cfg.MODEL.WEIGHTS = "output/rgb.pth"
+cfg.MODEL.WEIGHTS = "output/model_0024999.pth"
 cfg2.MODEL.WEIGHTS = "output/model_0019999.pth"
 rgb = image_process('docs/imagehd.png','docs/depthJet.png',cfg)
 # depth = image_process(,cfg2)
@@ -55,7 +57,7 @@ with torch.no_grad():
     gn = GatingNetwork(cfg,cfg2)
     # depth = image_process('docs/input.jpg',cfg)
     # rgb = image_process('docs/input.jpg',cfg)
-    for i in range(5):
-        print(gn(rgb))
+    # for i in range(5):
+    print(gn(rgb))
 
 
