@@ -1,7 +1,8 @@
-from detectron2.engine import DefaultTrainer
-import os
+from detectron2.engine import DefaultTrainer ,DefaultPredictor
+import os,cv2
 # import some common detectron2 utilities
-from detectron2.utils.visualizer import Visualizer
+import torch
+from detectron2.utils.visualizer import Visualizer ,ColorMode
 from detectron2 import model_zoo
 from detectron2.config import get_cfg
 from dataloader.dataset import Dataset
@@ -20,7 +21,7 @@ if __name__=="__main__":
     cfg.DATASETS.TEST = ()
     cfg.OUTPUT_DIR = 'output'
     cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/rgb.pth'
+    cfg.MODEL.WEIGHTS = 'output/model_0024999.pth'
     cfg.SOLVER.IMS_PER_BATCH = 1
     cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
     cfg.SOLVER.MAX_ITER = 10000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
@@ -32,10 +33,25 @@ if __name__=="__main__":
     # trainer = DefaultTrainer(cfg)
     # trainer.resume_or_load(resume=False)
     # trainer.train()
-    model = build_model(cfg)
-    checkpointer2 = DetectionCheckpointer(model)
-    checkpointer2.load(cfg.MODEL.WEIGHTS)
-    model.eval()
-    evaluator = COCOEvaluator("InOutDoorDepth_val", ("bbox"), False, output_dir="output/")
-    val_loader = build_detection_test_loader(cfg, "InOutDoorDepth_val")
-    print(inference_on_dataset(model, val_loader, evaluator))
+    pred = DefaultPredictor(cfg)
+    # checkpointer2 = DetectionCheckpointer(model)
+    # checkpointer2.load(cfg.MODEL.WEIGHTS)
+    # model.eval()
+    with torch.no_grad():
+        # outputs = gn(rgb)[0]
+        im = cv2.imread('docs/imagehd.png')
+
+        image1 = cv2.resize(im, (1920, 1080))
+        outputs = pred(image1)
+        v = Visualizer(image1,
+                       scale=0.5,
+                       instance_mode=ColorMode.IMAGE_BW
+                       # remove the colors of unsegmented pixels. This option is only available for segmentation models
+                       )
+        print(outputs)
+        out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+        cv2.imshow('test', out.get_image()[:, :, ::-1])
+        cv2.waitKey(0)
+    # evaluator = COCOEvaluator("InOutDoorDepth_val", ("bbox"), False, output_dir="output/")
+    # val_loader = build_detection_test_loader(cfg, "InOutDoorDepth_val")
+    # print(inference_on_dataset(model, val_loader, evaluator))

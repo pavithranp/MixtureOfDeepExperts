@@ -31,3 +31,37 @@ Medium average Precision (VOC2007),	0.7210983650566726
 Recall at maP (VOC2007),	0.7894736842105263
 Medium average Precision (VOC2010),	0.7796208079515341
 Recall at maP (VOC2010),	0.7894736842105263
+
+############
+IoU-Threshold,	0.6
+Softmax-Threshold,	0.5
+tp,	2180
+fp,	499
+fn,	0
+precision,	0.8137364688316536
+recall,	0.8436532507739938
+f1 score,	0.8284248527455824
+avg iou tp,	0.8262821363946514
+EER:, 0.8370743034056425, 0.8370743034056427
+Medium average Precision (Legacy),	0.7991314562914148
+Medium average Precision (VOC2007),	0.7991314562914148
+Recall at maP (VOC2007),	0.8436532507739938
+Medium average Precision (VOC2010),	0.8221442522808409
+Recall at maP (VOC2010),	0.8421052631578947
+
+Evaluating:  Gatingnet_12.pth
+IoU-Threshold,  0.6
+Softmax-Threshold,      0.5
+tp,     2223
+fp,     371
+fn,     0
+precision,      0.8569776407093292
+recall, 0.8602941176470589
+f1 score,       0.8586326767091542
+avg iou tp,     0.8213540098491314
+EER:, 0.8599071207431037, 0.8599071207431039
+Medium average Precision (Legacy),      0.8067701597479489
+Medium average Precision (VOC2007),     0.8067701597479489
+Recall at maP (VOC2007),        0.8602941176470589
+Medium average Precision (VOC2010),     0.8460107132745669
+Recall at maP (VOC2010),        0.8602941176470589

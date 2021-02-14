@@ -161,4 +161,4 @@ class GatingNetwork(nn.Module):
 
         scores = RGBscores*xs[:,0][...,None] + DepthScores*xs[:,1][...,None]
 
-        return self.output(scores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,image,x1)
+        return self.output(RGBscores,RGB_proposal_deltas, RGB_proposals, RGBfeatures,image,x1)
