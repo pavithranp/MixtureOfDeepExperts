@@ -16,16 +16,31 @@ from detectron2.modeling import build_model
 from detectron2.checkpoint import DetectionCheckpointer
 from utils.eval import evaluate,readAndSortBBs,get_dicts, read_gt
 import pickle
+import argparse
 from network.GatingNetwork import  GatingNetwork
+
+def parse_arg():
+    parser = argparse.ArgumentParser(description='Process some integers.')
+    parser.add_argument('--model1', default= "output/model_final.pth",
+                        help='path to RGB model')
+    parser.add_argument('--model2', default="output/model_0019999.pth",
+                        help='path to Depth model')
+    parser.add_argument('--gated', default="output/RGBD.pth",
+                        help='path to gated model')
+    parser.add_argument('--data',  default='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',
+                        help='path to InOutDoorData')
+    parser.add_argument('--out_dir', default='RGBD',
+                        help='output directory to save models')
+    return parser.parse_args()
+
 
 if __name__ == "__main__":
 
-    val_dataset = SingleDataset(root='/mnt/AAB281B7B2818911/datasets/InOutDoorPeopleRGBD',dataset='DepthJetQhd',
+    args = parse_arg()
+    val_dataset = SingleDataset(root=args.data,dataset='DepthJetQhd',
                                     set='test',grad=True)
     sortedListTestBB =[]
-    # args="ImagesQ_hd/" # change to ImagesQhd/
-    args = "DepthJetQhd/"
-    # x = Dataset(args)
+
     cfg = get_cfg()
     model = "COCO-Detection/faster_rcnn_R_50_C4_3x.yaml"
     cfg.merge_from_file(model_zoo.get_config_file(model))
@@ -33,17 +48,11 @@ if __name__ == "__main__":
     print("InOutDoorDepth_train")
     cfg.DATASETS.TEST = ()
     cfg.OUTPUT_DIR = 'output/'
-    cfg.DATALOADER.NUM_WORKERS = 2
-    cfg.MODEL.WEIGHTS = 'output/model_0019999.pth'
-    cfg.SOLVER.IMS_PER_BATCH = 2
-    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    cfg.SOLVER.MAX_ITER = 10000  # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128  # faster, and good enough for this toy dataset (default: 512)
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
-    cfg.MODEL.WEIGHTS = 'output/model_0019999.pth'
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 1
+    cfg.MODEL.WEIGHTS = args.model1
     cfg2 = cfg.clone()
     cfg2.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 128
-    cfg2.MODEL.WEIGHTS = 'output/rgb.pth'
+    cfg2.MODEL.WEIGHTS = args.model2
 
 
     outputs = []
@@ -52,6 +61,11 @@ if __name__ == "__main__":
     print("validating with:",len(val_dataset.files))
     with torch.no_grad():
         gn = GatingNetwork(cfg, cfg2)
+        gn.set_training(False)
+        wb = torch.load(args.gated)
+        gn.weight = wb["weights"]
+        gn.bias = wb["bias"]
+
         gn.eval()
         for d in val_dataset.files:
             rgb = cv2.imread(os.path.join(val_dataset.root, 'ImagesQ_hd', d + '.png'))
